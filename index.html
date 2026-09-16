@@ -1,85 +1,174 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
   <meta charset="UTF-8">
+  <!-- ==================================================================
+       TAG PALING PENTING UNTUK MASALAH NO.3
+       Tanpa baris ini, HP merender halaman selebar ~980px lalu mengecilkan
+       semuanya, sehingga tampilan terlihat kecil dan tidak mengikuti layar.
+       viewport-fit=cover + env(safe-area-inset-*) supaya aman di HP berponi.
+       =================================================================== -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#007bff">
+  <title>Absensi Kehadiran</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <style>
-    body { font-family: sans-serif; text-align: center; margin: 0; padding: 0; background-color: #ffffff;}
-    .container { background: white; padding: 16px 20px 24px 20px; width: 100%; min-height: 100vh; box-sizing: border-box; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
-    input[type="text"], input[type="date"] { width: 100%; max-width: 400px; padding: 12px; margin-bottom: 12px; border: 1px solid #ccc; border-radius: 5px; font-size: 16px; box-sizing: border-box; text-align: center;}
+    /* ==== Dasar responsif ====
+       - Semua elemen memakai width:100% + max-width variabel, bukan 400px kaku.
+       - Ukuran font memakai clamp() supaya ikut lebar layar: kecil di HP mini,
+         nyaman di HP besar, tidak melebar berlebihan di tablet/desktop. */
+    :root {
+      --lebar-maks: 520px;
+      --radius: 8px;
+      --font-dasar: clamp(14px, 3.8vw, 17px);
+      --font-kecil: clamp(11px, 3vw, 13px);
+      --font-judul: clamp(19px, 5.6vw, 26px);
+      --font-tombol: clamp(15px, 4.2vw, 18px);
+      --pad-x: clamp(12px, 4vw, 22px);
+    }
 
-    button { color: white; padding: 12px 24px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; width: 100%; max-width: 400px; font-weight: bold;}
+    * { box-sizing: border-box; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: var(--font-dasar);
+      text-align: center;
+      margin: 0;
+      padding: 0;
+      background-color: #ffffff;
+      color: #222;
+      overflow-x: hidden;
+    }
+
+    .container {
+      background: #fff;
+      width: 100%;
+      max-width: var(--lebar-maks);
+      min-height: 100vh;
+      min-height: 100dvh; /* lebih akurat di HP karena bar browser bisa muncul-hilang */
+      margin: 0 auto;
+      padding: 16px var(--pad-x) calc(28px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    h2.judul { margin: 0 0 2px; font-size: var(--font-judul); line-height: 1.2; }
+    h3.sub-judul { margin: 0 0 8px; color: #444; font-size: clamp(14px, 4.2vw, 18px); font-weight: normal; }
+
+    input[type="text"], input[type="date"] {
+      width: 100%;
+      padding: clamp(10px, 3.2vw, 14px);
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: var(--radius);
+      font-size: max(16px, var(--font-dasar)); /* >=16px mencegah iOS auto-zoom saat fokus */
+      text-align: center;
+      font-family: inherit;
+    }
+
+    button {
+      color: #fff;
+      padding: clamp(11px, 3.4vw, 15px) 18px;
+      border: none;
+      border-radius: var(--radius);
+      font-size: var(--font-tombol);
+      cursor: pointer;
+      width: 100%;
+      font-weight: bold;
+      font-family: inherit;
+      min-height: 46px; /* target sentuh nyaman di layar kecil */
+    }
+    button:focus-visible { outline: 3px solid #0b5ed7; outline-offset: 2px; }
+
     .btn-absen { background-color: #007bff; margin-bottom: 8px; }
     .btn-absen:hover { background-color: #0056b3; }
     .btn-absen:disabled { background-color: #a9c6e8 !important; cursor: not-allowed; }
-    .btn-rekap { background-color: #6c757d; margin-bottom: 8px;}
+    .btn-rekap { background-color: #6c757d; margin-bottom: 8px; }
     .btn-rekap:hover { background-color: #5a6268; }
 
-    #status { margin-top: 10px; font-weight: bold; width: 100%; max-width: 400px; }
-    .info-text { font-size: 12px; color: #666; margin: 0 0 14px 0; width: 100%; max-width: 400px; }
-    .label-teks { display: block; text-align: left; width: 100%; max-width: 400px; margin: 0 auto 5px auto; font-weight: bold; font-size: 14px; color: #333; }
+    #status { margin-top: 10px; font-weight: bold; width: 100%; font-size: var(--font-dasar); word-break: break-word; }
+    .info-text { font-size: var(--font-kecil); color: #666; margin: 0 0 14px; }
+    .label-teks { display: block; text-align: left; width: 100%; margin: 0 0 5px; font-weight: bold; font-size: clamp(12px, 3.4vw, 15px); color: #333; }
 
-    .box-keterangan { width: 100%; max-width: 400px; padding: 12px; margin-bottom: 14px; border-radius: 5px; font-size: 14px; font-weight: bold; box-sizing: border-box; text-align: center; transition: all 0.3s ease; }
+    .box-keterangan { width: 100%; padding: 12px; margin-bottom: 14px; border-radius: var(--radius); font-size: clamp(12px, 3.5vw, 15px); font-weight: bold; text-align: center; }
 
-    .radio-group { display: flex; width: 100%; max-width: 400px; justify-content: space-between; margin-bottom: 14px; gap: 10px; }
-    .radio-group input[type="radio"] { display: none; }
-    .radio-label { flex: 1; padding: 12px; text-align: center; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.2s ease-in-out; border: 2px solid transparent; background-color: rgba(108, 117, 125, 0.15); color: #6c757d; }
+    /* Nama terkunci */
+    .nama-terkunci { background-color: #e9ecef !important; color: #495057; font-weight: bold; }
+    .catatan-kunci { font-size: var(--font-kecil); color: #856404; background: #fff3cd; border: 1px solid #ffeeba; border-radius: var(--radius); padding: 8px 10px; margin: -4px 0 12px; text-align: left; }
 
-    .radio-group input[id="clockin"]:checked + .label-clockin { background-color: #28a745; color: white; border-color: #1e7e34; box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3); transform: scale(1.03); }
-    .radio-group input[id="clockout"]:checked + .label-clockout { background-color: #ff851b; color: white; border-color: #d35400; box-shadow: 0 4px 8px rgba(255, 133, 27, 0.3); transform: scale(1.03); }
-    .radio-group input[id="clockin"]:disabled + .label-clockin { background-color: #e9ecef !important; border-color: #ccc !important; color: #adb5bd !important; cursor: not-allowed !important; box-shadow: none !important; transform: scale(1) !important; }
+    /* Jenis absensi: wrap otomatis kalau layar sangat sempit */
+    .radio-group { display: flex; flex-wrap: wrap; width: 100%; margin-bottom: 14px; gap: 10px; }
+    .radio-group input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
+    .radio-label { flex: 1 1 130px; padding: clamp(11px, 3.4vw, 15px) 8px; text-align: center; border-radius: var(--radius); cursor: pointer; font-weight: bold; font-size: var(--font-tombol); transition: all 0.2s ease-in-out; border: 2px solid transparent; background-color: rgba(108, 117, 125, 0.15); color: #6c757d; }
 
-    #mapBox { display: none; width: 100%; max-width: 400px; margin: 0 auto 14px auto; }
-    #peta { width: 100%; height: 220px; border-radius: 8px; border: 1px solid #ccc; }
-    #infoJarak { text-align: center; font-size: 13px; margin-top: 8px; padding: 8px; border-radius: 5px; font-weight: bold; box-sizing: border-box; }
-    #infoAkurasi { text-align: center; font-size: 11px; margin-top: 6px; color: #666; }
-    .btn-kalibrasi { background-color: rgba(255, 193, 7, 0.35); color: #7a5b00; border: 1px solid rgba(255, 193, 7, 0.7); font-size: 14px; padding: 10px; margin-bottom: 10px; }
+    .radio-group input[id="clockin"]:checked + .label-clockin { background-color: #28a745; color: #fff; border-color: #1e7e34; box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3); }
+    .radio-group input[id="clockout"]:checked + .label-clockout { background-color: #ff851b; color: #fff; border-color: #d35400; box-shadow: 0 4px 8px rgba(255, 133, 27, 0.3); }
+    .radio-group input:disabled + .radio-label { background-color: #e9ecef !important; border-color: #ccc !important; color: #adb5bd !important; cursor: not-allowed !important; box-shadow: none !important; }
+
+    #mapBox { display: none; width: 100%; margin: 0 0 14px; }
+    /* Tinggi peta ikut lebar layar, tidak lagi 220px kaku */
+    #peta { width: 100%; height: clamp(180px, 52vw, 300px); border-radius: var(--radius); border: 1px solid #ccc; }
+    #infoJarak { text-align: center; font-size: clamp(12px, 3.4vw, 14px); margin-top: 8px; padding: 8px; border-radius: 5px; font-weight: bold; }
+    #infoAkurasi { text-align: center; font-size: var(--font-kecil); margin-top: 6px; color: #666; }
+    .btn-kalibrasi { background-color: rgba(255, 193, 7, 0.35); color: #7a5b00; border: 1px solid rgba(255, 193, 7, 0.7); font-size: clamp(13px, 3.6vw, 15px); margin-bottom: 10px; }
     .btn-kalibrasi:hover { background-color: rgba(255, 193, 7, 0.5); }
     .btn-kalibrasi:disabled { background-color: rgba(255, 193, 7, 0.15); color: #b8a168; cursor: wait; }
 
-    #cameraBox { width: 100%; max-width: 400px; margin: 0 auto 8px auto; }
-    #videoKamera { width: 100%; max-height: 320px; object-fit: cover; border-radius: 8px; display: none; background: #000; }
-    #previewFoto { display: none; width: 100%; max-width: 400px; height: auto; border-radius: 8px; margin: 0 auto 14px auto; border: 2px solid #ddd; box-sizing: border-box; }
+    #cameraBox { width: 100%; margin: 0 0 8px; }
+    #videoKamera { width: 100%; max-height: min(60vh, 380px); object-fit: cover; border-radius: var(--radius); display: none; background: #000; }
+    #previewFoto { display: none; width: 100%; height: auto; border-radius: var(--radius); margin: 0 0 14px; border: 2px solid #ddd; }
     .btn-kamera-buka { background-color: #17a2b8; margin-bottom: 8px; }
     .btn-kamera-buka:hover { background-color: #138496; }
     .btn-kamera-jepret { background-color: #28a745; margin-bottom: 8px; }
     .btn-kamera-jepret:hover { background-color: #1e7e34; }
     .btn-kamera-ulangi { background-color: #6c757d; margin-bottom: 8px; }
     .btn-kamera-ulangi:hover { background-color: #5a6268; }
-    .foto-status-ok { width: 100%; max-width: 400px; padding: 10px; margin: 0 auto 10px auto; border-radius: 5px; text-align: center; box-sizing: border-box; background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; font-size: 14px; display: none; }
+    .foto-status-ok { width: 100%; padding: 10px; margin: 0 0 10px; border-radius: var(--radius); text-align: center; background-color: #e8f5e9; border: 2px solid #4caf50; color: #2e7d32; font-size: clamp(12px, 3.5vw, 15px); display: none; }
 
-    .section-box { display: none; width: 100%; max-width: 400px; margin-top: 25px; padding: 20px 15px; border-radius: 8px; box-sizing: border-box; text-align: left; border: 1px solid #ddd; }
+    .section-box { display: none; width: 100%; margin-top: 25px; padding: 18px clamp(10px, 3.5vw, 18px); border-radius: var(--radius); text-align: left; border: 1px solid #ddd; }
     #sectionRekap { background: #f4f6f7; }
 
-    .date-row { display: flex; gap: 10px; margin-bottom: 15px; }
-    .date-col { flex: 1; }
-    .date-col label { font-size: 12px; color: #555; display: block; margin-bottom: 4px; font-weight: bold; }
-    .date-col input { margin-bottom: 0; padding: 10px; font-size: 14px; }
+    .date-row { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; }
+    .date-col { flex: 1 1 130px; }
+    .date-col label { font-size: var(--font-kecil); color: #555; display: block; margin-bottom: 4px; font-weight: bold; }
+    .date-col input { margin-bottom: 0; padding: 10px; }
 
-    .card-rekap { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 6px solid #a8e6cf; position: relative; }
-    .card-rekap .shift-title { font-weight: bold; font-size: 16px; color: #222; }
+    .card-rekap { background: #fff; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); border-left: 6px solid #a8e6cf; position: relative; }
+    .card-rekap .shift-title { font-weight: bold; font-size: clamp(14px, 4vw, 17px); color: #222; padding-right: 92px; }
     .card-rekap .shift-title span { color: #555; }
-    .card-rekap .date-text { color: #666; font-size: 13px; margin-top: 3px; margin-bottom: 12px; }
-    .card-rekap .badge-durasi { position: absolute; top: 15px; right: 15px; background: #eaf2f8; color: #1f618d; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .card-rekap .time-row { display: flex; align-items: center; gap: 15px; font-size: 14px; color: #444; }
+    .card-rekap .date-text { color: #666; font-size: clamp(11px, 3.2vw, 14px); margin: 3px 0 12px; }
+    .card-rekap .badge-durasi { position: absolute; top: 14px; right: 14px; background: #eaf2f8; color: #1f618d; padding: 5px 11px; border-radius: 20px; font-size: clamp(10px, 3vw, 13px); font-weight: bold; }
+    .card-rekap .time-row { display: flex; flex-wrap: wrap; align-items: center; gap: 15px; font-size: clamp(12px, 3.5vw, 15px); color: #444; }
     .card-rekap .time-row span { display: flex; align-items: center; gap: 5px; }
     .icon-in { color: #28a745; font-weight: bold; }
     .icon-out { color: #dc3545; font-weight: bold; }
+
+    /* Layar sangat lebar (tablet/desktop): halaman tetap rapi di tengah */
+    @media (min-width: 640px) {
+      body { background: #f0f2f5; }
+      .container { min-height: auto; margin: 24px auto; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+    }
   </style>
 </head>
 <body>
   <div class="container">
 
-    <h2 style="margin: 0 0 2px 0; font-size: 21px;">Absensi Kehadiran</h2>
-    <h3 id="namaLokasiEl" style="margin: 0 0 8px 0; color: #444; font-size: 16px; font-weight: normal;">Memuat...</h3>
+    <h2 class="judul">Absensi Kehadiran</h2>
+    <h3 class="sub-judul" id="namaLokasiEl">Memuat...</h3>
 
-    <div id="jamDigital" style="font-weight: bold; margin: 0 0 12px 0; color: #007bff;"></div>
+    <div id="jamDigital" style="font-weight: bold; margin: 0 0 12px; color: #007bff;"></div>
 
     <p class="info-text">Pastikan GPS aktif.</p>
 
-    <label class="label-teks">Nama Karyawan</label>
-    <input type="text" id="nama" placeholder="Masukkan Nama Anda" oninput="this.value = this.value.toUpperCase()">
+    <label class="label-teks" for="nama">Nama Karyawan</label>
+    <input type="text" id="nama" placeholder="Masukkan Nama Anda" autocomplete="off" oninput="this.value = this.value.toUpperCase()">
+    <div id="catatanKunci" class="catatan-kunci" style="display:none;">
+      Nama terkunci untuk perangkat ini. Hubungi admin bila perlu diganti.
+    </div>
 
     <button id="btnKalibrasi" class="btn-kalibrasi" onclick="kalibrasiUlang()">Muat Ulang GPS</button>
 
@@ -104,7 +193,7 @@
     <div id="cameraBox">
       <video id="videoKamera" autoplay playsinline muted></video>
       <canvas id="canvasFoto" style="display:none;"></canvas>
-      <img id="previewFoto">
+      <img id="previewFoto" alt="">
       <div id="fotoStatusOk" class="foto-status-ok">✅ Foto berhasil diambil</div>
 
       <button type="button" id="btnBukaKamera" class="btn-kamera-buka" onclick="bukaKamera()">📷 Buka Kamera</button>
@@ -118,14 +207,14 @@
     <div id="status"></div>
 
     <div id="sectionRekap" class="section-box">
-      <h3 style="margin-top:0; font-size: 16px; border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 15px;">🔍 Cari Riwayat Absensi</h3>
+      <h3 style="margin-top:0; font-size: clamp(14px,4vw,17px); border-bottom: 2px solid #ddd; padding-bottom: 10px; margin-bottom: 15px;">🔍 Cari Riwayat Absensi</h3>
       <div class="date-row">
         <div class="date-col">
-          <label>Mulai Tanggal</label>
+          <label for="tglMulaiRekap">Mulai Tanggal</label>
           <input type="date" id="tglMulaiRekap">
         </div>
         <div class="date-col">
-          <label>Sampai Tanggal</label>
+          <label for="tglSelesaiRekap">Sampai Tanggal</label>
           <input type="date" id="tglSelesaiRekap">
         </div>
       </div>
@@ -137,8 +226,8 @@
 
   <script>
     // =========================================================================
-    // GANTI URL DI BAWAH INI dengan URL Web App hasil "Deploy" Apps Script Anda.
-    // Contoh: https://script.google.com/macros/s/AKfycb.../exec
+    // GANTI URL DI BAWAH INI setiap kali Anda "Deploy > New deployment" ulang
+    // di Apps Script. URL lama tetap memakai kode versi lama.
     // =========================================================================
     var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwSWvrhdMJP1fQZOQF_ELr2Nhikc8wF7AC-k1ZVB_pMu4CBKhw5XFoDueaHu5HiI7rw/exec";
 
@@ -147,25 +236,15 @@
     var MAKSIMAL_JARAK = 50;
     var GUNAKAN_RADIUS = "TIDAK";
 
-    var petaMap = null;
-    var markerSaya = null;
-    var markerKantor = null;
-    var lingkaranRadius = null;
-    var lingkaranAkurasi = null;
+    var petaMap = null, markerSaya = null, markerKantor = null, lingkaranRadius = null, lingkaranAkurasi = null;
+    var watchId = null, posisiTerakhir = null;
 
-    var watchId = null;
-    var posisiTerakhir = null;
+    var LEBAR_KAMERA = 480, TINGGI_KAMERA = 640, KUALITAS_FOTO = 0.6;
+    var streamKamera = null, fotoTerambil = null;
 
-    var LEBAR_KAMERA = 480;
-    var TINGGI_KAMERA = 640;
-    var KUALITAS_FOTO = 0.6;
+    // Status absen terakhir menurut SERVER (bukan localStorage lagi)
+    var statusServer = { status: "BELUM", tanggal: "", jam: "" };
 
-    var streamKamera = null;
-    var fotoTerambil = null;
-
-    // ==== Pemanggil API Apps Script (pengganti google.script.run) ====
-    // Content-Type text/plain dipakai supaya browser TIDAK mengirim preflight
-    // OPTIONS (yang tidak ditangani Apps Script secara default).
     function callApi(action, params) {
       return fetch(APPS_SCRIPT_URL, {
         method: 'POST',
@@ -178,46 +257,73 @@
         });
     }
 
+    // ==== ID perangkat: dibuat sekali, dipakai server untuk mengikat nama <-> HP ====
+    // Inilah kunci anti titip absen. Nama yang sudah terdaftar di satu HP tidak
+    // bisa dipakai dari HP lain, dan satu HP tidak bisa dipakai untuk 2 nama.
+    function getDeviceId() {
+      var id = localStorage.getItem("deviceId");
+      if (!id) {
+        id = "DEV-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem("deviceId", id);
+      }
+      return id;
+    }
+
     function getTanggalHariIni() {
       var now = new Date();
-      var y = now.getFullYear();
-      var m = String(now.getMonth() + 1).padStart(2, '0');
-      var d = String(now.getDate()).padStart(2, '0');
-      return y + "-" + m + "-" + d;
+      return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, '0') + "-" + String(now.getDate()).padStart(2, '0');
     }
 
     function updateJam() {
       var now = new Date();
-      var hari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-      var bulan = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
+      var hari = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'];
+      var bulan = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
       var teksTanggal = hari[now.getDay()] + ", " + now.getDate() + " " + bulan[now.getMonth()] + " " + now.getFullYear();
-      var teksJam = now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0') + ":" + now.getSeconds().toString().padStart(2, '0');
-      document.getElementById('jamDigital').innerHTML = "<div style='font-size: 13px; color: #666; margin-bottom: 2px; font-weight: normal;'>" + teksTanggal + "</div><div style='font-size: 22px;'>" + teksJam + "</div>";
+      var teksJam = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0') + ":" + String(now.getSeconds()).padStart(2,'0');
+      document.getElementById('jamDigital').innerHTML =
+        "<div style='font-size: clamp(11px,3.2vw,14px); color:#666; margin-bottom:2px; font-weight:normal;'>" + teksTanggal + "</div>" +
+        "<div style='font-size: clamp(20px,6.5vw,30px);'>" + teksJam + "</div>";
     }
 
-    function periksaStatusAbsenHariIni() {
-      var statusAbsen = localStorage.getItem("absen_status_" + getTanggalHariIni());
+    // ==== Kunci nama di layar ====
+    function kunciNama(nama) {
+      var input = document.getElementById("nama");
+      input.value = nama;
+      input.readOnly = true;
+      input.classList.add("nama-terkunci");
+      document.getElementById("catatanKunci").style.display = "block";
+      localStorage.setItem("namaKaryawan", nama);
+    }
+
+    // ==== Tampilkan status berdasarkan jawaban server ====
+    function terapkanStatus(st) {
+      statusServer = st || { status: "BELUM" };
       var boxKet = document.getElementById("boxKeterangan");
-      var radClockIn = document.getElementById("clockin");
-      var radClockOut = document.getElementById("clockout");
+      var radIn = document.getElementById("clockin");
+      var radOut = document.getElementById("clockout");
 
-      radClockIn.disabled = false;
-      radClockOut.disabled = false;
+      radIn.disabled = false; radOut.disabled = false;
 
-      if (statusAbsen === "CLOCK IN") {
-        boxKet.innerHTML = "Hari ini sudah absen datang, silahkan absen pulang";
-        boxKet.style.cssText = "background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba;";
-        radClockIn.disabled = true; radClockIn.checked = false; radClockOut.checked = true;
-      } else if (statusAbsen === "CLOCK OUT") {
-        boxKet.innerHTML = "Absensi pulang hari ini telah tercatat. Terima kasih!";
-        boxKet.style.cssText = "background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;";
-        radClockIn.checked = true;
+      if (statusServer.status === "CLOCK IN") {
+        // Ada shift yang masih terbuka -> wajib CLOCK OUT
+        boxKet.innerHTML = "Sudah CLOCK IN pada " + (statusServer.tanggal || "-") + " jam " + (statusServer.jam || "-") + ". Silakan CLOCK OUT.";
+        boxKet.style.cssText = "background-color:#fff3cd; color:#856404; border:1px solid #ffeeba;";
+        radIn.disabled = true; radIn.checked = false; radOut.checked = true;
       } else {
-        boxKet.innerHTML = "Belum Absen Masuk, Belum ada absensi untuk hari ini";
-        boxKet.style.cssText = "background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;";
-        radClockIn.checked = true;
+        boxKet.innerHTML = "Belum ada CLOCK IN yang terbuka. Silakan CLOCK IN.";
+        boxKet.style.cssText = "background-color:#f8d7da; color:#721c24; border:1px solid #f5c6cb;";
+        radOut.disabled = true; radOut.checked = false; radIn.checked = true;
       }
+    }
+
+    function muatStatusDariServer(nama) {
+      if (!nama) { terapkanStatus({ status: "BELUM" }); return Promise.resolve(); }
+      return callApi('getStatusAbsen', { nama: nama, deviceId: getDeviceId() })
+        .then(function(st) { terapkanStatus(st); })
+        .catch(function(err) {
+          document.getElementById("boxKeterangan").innerHTML = "Tidak bisa membaca status absen dari server: " + err.message;
+          document.getElementById("boxKeterangan").style.cssText = "background-color:#f8d7da; color:#721c24; border:1px solid #f5c6cb;";
+        });
     }
 
     function setDefaultDates() {
@@ -227,39 +333,37 @@
     }
 
     function cekWebViewInApp() {
-      var ua = navigator.userAgent || navigator.vendor || window.opera || "";
-      var isInApp = /FBAN|FBAV|Instagram|Line\/|; wv\)/i.test(ua);
-      if (isInApp) {
-        var peringatan = document.createElement("div");
-        peringatan.innerHTML = "⚠️ Anda membuka link ini dari dalam aplikasi (WhatsApp/Instagram/Facebook). Ketuk titik tiga (⋮) di pojok, lalu pilih <b>'Buka di Browser'</b> agar kamera dapat diakses dan proses foto tidak gagal.";
-        peringatan.style.cssText = "width:100%; max-width:400px; background:#fff3cd; color:#856404; border:1px solid #ffeeba; padding:10px; border-radius:5px; font-size:13px; margin-bottom:15px; text-align:center;";
-        document.querySelector(".container").insertBefore(peringatan, document.querySelector(".container").children[1]);
+      var ua = navigator.userAgent || navigator.vendor || "";
+      if (/FBAN|FBAV|Instagram|Line\/|; wv\)/i.test(ua)) {
+        var p = document.createElement("div");
+        p.innerHTML = "⚠️ Link ini dibuka dari dalam aplikasi (WhatsApp/Instagram/Facebook). Ketuk titik tiga (⋮) lalu pilih <b>'Buka di Browser'</b> agar kamera bisa diakses.";
+        p.style.cssText = "width:100%; background:#fff3cd; color:#856404; border:1px solid #ffeeba; padding:10px; border-radius:8px; font-size:13px; margin-bottom:15px; text-align:center;";
+        var c = document.querySelector(".container");
+        c.insertBefore(p, c.children[1]);
       }
     }
 
-    // ==== Muat pengaturan (nama lokasi, radius, koordinat) dari Apps Script saat halaman dibuka ====
     window.onload = function() {
+      updateJam(); setInterval(updateJam, 1000);
+      setDefaultDates(); cekWebViewInApp();
+
+      var simpananNama = localStorage.getItem("namaKaryawan");
+      if (simpananNama) { kunciNama(simpananNama); }
+
       document.getElementById('status').innerHTML = "Memuat pengaturan...";
       callApi('getConfig', {}).then(function(cfg) {
         KANTOR_LAT = parseFloat(cfg.kantorLat);
         KANTOR_LNG = parseFloat(cfg.kantorLng);
-        MAKSIMAL_JARAK = parseInt(cfg.maksimalJarak);
+        MAKSIMAL_JARAK = parseInt(cfg.maksimalJarak, 10);
         GUNAKAN_RADIUS = cfg.gunakanRadius;
         document.getElementById('namaLokasiEl').innerText = cfg.namaLokasi;
         document.getElementById('status').innerHTML = "";
-
-        updateJam(); setInterval(updateJam, 1000); periksaStatusAbsenHariIni(); setDefaultDates(); cekWebViewInApp();
-        var simpananNama = localStorage.getItem("namaKaryawan");
-        if (simpananNama) {
-          document.getElementById("nama").value = simpananNama;
-          document.getElementById("nama").readOnly = true;
-          document.getElementById("nama").style.backgroundColor = "#e9ecef";
-        }
         mulaiPantauLokasi();
+        return muatStatusDariServer(simpananNama);
       }).catch(function(err) {
         document.getElementById('status').innerHTML =
           "<span style='color:red;'>Gagal memuat pengaturan dari server: " + err.message +
-          ". Pastikan APPS_SCRIPT_URL di kode sudah diisi dengan benar dan Web App sudah di-deploy dengan akses 'Anyone'.</span>";
+          ". Pastikan APPS_SCRIPT_URL sudah benar dan Web App di-deploy dengan akses 'Anyone'.</span>";
       });
     };
 
@@ -270,12 +374,10 @@
 
     function mulaiPantauLokasi() {
       document.getElementById("mapBox").style.display = "block";
-
       if (!navigator.geolocation) {
-        document.getElementById("peta").innerHTML = "<div style='padding:15px;background:#f8d7da;color:#721c24;border-radius:8px;font-size:12px;text-align:center;'>Browser tidak mendukung GPS.</div>";
+        document.getElementById("peta").innerHTML = "<div style='padding:15px;background:#f8d7da;color:#721c24;border-radius:8px;font-size:12px;'>Browser tidak mendukung GPS.</div>";
         return;
       }
-
       document.getElementById("infoJarak").innerHTML = "🔄 Mencari sinyal GPS...";
       document.getElementById("infoJarak").style.cssText = "background:#eaf2f8; color:#1f618d;";
       document.getElementById("infoAkurasi").innerHTML = "";
@@ -284,19 +386,12 @@
 
       watchId = navigator.geolocation.watchPosition(
         function(position) {
-          posisiTerakhir = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            akurasi: position.coords.accuracy
-          };
+          posisiTerakhir = { lat: position.coords.latitude, lng: position.coords.longitude, akurasi: position.coords.accuracy };
           var jarak = Math.round(hitungJarak(posisiTerakhir.lat, posisiTerakhir.lng, KANTOR_LAT, KANTOR_LNG));
-          try {
-            tampilkanPeta(posisiTerakhir.lat, posisiTerakhir.lng, jarak, posisiTerakhir.akurasi);
-          } catch (errPeta) {
-            document.getElementById("peta").innerHTML = "<div style='padding:15px;background:#f8d7da;color:#721c24;border-radius:8px;font-size:12px;text-align:center;'>Peta gagal ditampilkan: " + errPeta.message + "</div>";
-          }
+          try { tampilkanPeta(posisiTerakhir.lat, posisiTerakhir.lng, jarak, posisiTerakhir.akurasi); }
+          catch (errPeta) { document.getElementById("peta").innerHTML = "<div style='padding:15px;background:#f8d7da;color:#721c24;border-radius:8px;font-size:12px;'>Peta gagal ditampilkan: " + errPeta.message + "</div>"; }
         },
-        function(error) {
+        function() {
           document.getElementById("infoJarak").innerHTML = "❌ Gagal mengambil lokasi GPS. Pastikan izin lokasi aktif untuk browser ini.";
           document.getElementById("infoJarak").style.cssText = "background:#f8d7da; color:#721c24;";
         },
@@ -309,37 +404,23 @@
       btn.disabled = true; btn.innerHTML = "Mencari sinyal GPS terbaik... ⏳";
       posisiTerakhir = null;
       mulaiPantauLokasi();
-      setTimeout(function() {
-        btn.disabled = false; btn.innerHTML = "Muat Ulang GPS";
-      }, 4000);
+      setTimeout(function() { btn.disabled = false; btn.innerHTML = "Muat Ulang GPS"; }, 4000);
     }
 
     function toggleSection(sectionId) {
       var sec = document.getElementById(sectionId);
       sec.style.display = (sec.style.display === "block") ? "none" : "block";
-      if (sec.style.display === "block") {
-        window.scrollTo({ top: sec.offsetTop, behavior: 'smooth' });
-      }
+      if (sec.style.display === "block") { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     }
 
     function bukaKamera() {
       var statusDiv = document.getElementById("status");
       statusDiv.innerHTML = "";
-
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        statusDiv.innerHTML = "<span style='color:red;'>Browser ini tidak mendukung akses kamera langsung. Coba update Chrome, atau buka link ini di Chrome/Safari (bukan dari dalam aplikasi chat).</span>";
+        statusDiv.innerHTML = "<span style='color:red;'>Browser ini tidak mendukung akses kamera langsung. Buka link di Chrome/Safari, bukan dari dalam aplikasi chat.</span>";
         return;
       }
-
-      var constraints = {
-        audio: false,
-        video: {
-          facingMode: "user",
-          width: { ideal: LEBAR_KAMERA },
-          height: { ideal: TINGGI_KAMERA }
-        }
-      };
-
+      var constraints = { audio: false, video: { facingMode: "user", width: { ideal: LEBAR_KAMERA }, height: { ideal: TINGGI_KAMERA } } };
       var btnBuka = document.getElementById("btnBukaKamera");
       btnBuka.disabled = true; btnBuka.innerHTML = "Membuka kamera... ⏳";
 
@@ -349,7 +430,6 @@
         video.srcObject = stream;
         video.style.display = "block";
         video.play();
-
         document.getElementById("previewFoto").style.display = "none";
         document.getElementById("fotoStatusOk").style.display = "none";
         document.getElementById("btnJepret").style.display = "block";
@@ -359,28 +439,20 @@
       }).catch(function(err) {
         btnBuka.disabled = false; btnBuka.innerHTML = "📷 Buka Kamera";
         var pesan = "Gagal membuka kamera.";
-        if (err && err.name === "NotAllowedError") {
-          pesan = "Izin kamera ditolak. Buka pengaturan browser, izinkan akses Kamera untuk halaman ini, lalu coba lagi.";
-        } else if (err && err.name === "NotReadableError") {
-          pesan = "Kamera sedang dipakai aplikasi lain, atau HP kehabisan memori untuk membuka kamera. Tutup aplikasi lain lalu coba lagi.";
-        } else if (err && err.name === "NotFoundError") {
-          pesan = "Kamera depan tidak ditemukan di perangkat ini.";
-        }
-        statusDiv.innerHTML = "<span style='color:red;'>" + pesan + "</span>";
+        if (err && err.name === "NotAllowedError") pesan = "Izin kamera ditolak. Buka pengaturan browser, izinkan akses Kamera untuk halaman ini, lalu coba lagi.";
+        else if (err && err.name === "NotReadableError") pesan = "Kamera sedang dipakai aplikasi lain, atau HP kehabisan memori. Tutup aplikasi lain lalu coba lagi.";
+        else if (err && err.name === "NotFoundError") pesan = "Kamera depan tidak ditemukan di perangkat ini.";
+        document.getElementById("status").innerHTML = "<span style='color:red;'>" + pesan + "</span>";
       });
     }
 
     function jepretFoto() {
       var video = document.getElementById("videoKamera");
       var canvas = document.getElementById("canvasFoto");
-
       var w = Math.min(video.videoWidth || LEBAR_KAMERA, LEBAR_KAMERA);
       var h = Math.round(w * (video.videoHeight && video.videoWidth ? (video.videoHeight / video.videoWidth) : (TINGGI_KAMERA / LEBAR_KAMERA)));
-
-      canvas.width = w;
-      canvas.height = h;
-      var ctx = canvas.getContext("2d");
-      ctx.drawImage(video, 0, 0, w, h);
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(video, 0, 0, w, h);
 
       var dataUrl = canvas.toDataURL("image/jpeg", KUALITAS_FOTO);
       fotoTerambil = { base64: dataUrl.split(',')[1], mimeType: "image/jpeg" };
@@ -388,9 +460,7 @@
       var preview = document.getElementById("previewFoto");
       preview.src = dataUrl;
       preview.style.display = "block";
-
       canvas.width = 0; canvas.height = 0;
-
       hentikanKamera();
 
       document.getElementById("fotoStatusOk").style.display = "block";
@@ -410,7 +480,7 @@
     function hentikanKamera() {
       var video = document.getElementById("videoKamera");
       if (streamKamera) {
-        streamKamera.getTracks().forEach(function(track) { track.stop(); });
+        streamKamera.getTracks().forEach(function(t) { t.stop(); });
         streamKamera = null;
       }
       video.srcObject = null;
@@ -418,32 +488,44 @@
     }
 
     function tarikDataRekap() {
-      var nama = document.getElementById("nama").value, tglMulai = document.getElementById("tglMulaiRekap").value, tglSelesai = document.getElementById("tglSelesaiRekap").value, divHasil = document.getElementById("hasilRekap");
+      var nama = document.getElementById("nama").value.trim(),
+          tglMulai = document.getElementById("tglMulaiRekap").value,
+          tglSelesai = document.getElementById("tglSelesaiRekap").value,
+          divHasil = document.getElementById("hasilRekap");
       if (!nama || !tglMulai || !tglSelesai) { divHasil.innerHTML = "<span style='color:red;'>Lengkapi form nama dan tanggal.</span>"; return; }
       divHasil.innerHTML = "Mencari data ke database... ⏳";
 
       callApi('getRekapData', { namaKaryawan: nama, strMulai: tglMulai, strSelesai: tglSelesai }).then(function(data) {
-        if (data.length === 0) { divHasil.innerHTML = "<div style='background:#fff3cd; padding:10px; border-radius:5px; color:#856404; text-align:center;'>Tidak ada riwayat absensi pada rentang ini.</div>"; return; }
-        var html = "", hariList = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'], bulanList = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        if (!data.length) { divHasil.innerHTML = "<div style='background:#fff3cd; padding:10px; border-radius:5px; color:#856404; text-align:center;'>Tidak ada riwayat absensi pada rentang ini.</div>"; return; }
+        var html = "",
+            hariList = ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],
+            bulanList = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
 
         data.forEach(function(item) {
           var durasiText = "Belum Selesai";
           if (item.masuk !== "-" && item.pulang !== "-") {
-            var diffMs = new Date(2000, 0, 1, ...item.pulang.split(":")) - new Date(2000, 0, 1, ...item.masuk.split(":"));
+            var pIn = item.masuk.split(":"), pOut = item.pulang.split(":");
+            var diffMs = new Date(2000,0,1,+pOut[0],+pOut[1],+(pOut[2]||0)) - new Date(2000,0,1,+pIn[0],+pIn[1],+(pIn[2]||0));
+            if (diffMs < 0) diffMs += 86400000; // shift lewat tengah malam
             if (diffMs > 0) durasiText = Math.floor(diffMs / 3600000) + "j " + Math.round((diffMs % 3600000) / 60000) + "m";
           }
-          var dObj = new Date(item.tglAsli.split("/").reverse().join("-")), pDate = hariList[dObj.getDay()] + ", " + dObj.getDate() + " " + bulanList[dObj.getMonth()] + " " + dObj.getFullYear();
-          var jIn = item.masuk !== "-" ? item.masuk.substring(0,5) : "--:--", jOut = item.pulang !== "-" ? item.pulang.substring(0,5) : "--:--";
-
-          html += `<div class='card-rekap'><div class='badge-durasi'>${durasiText}</div><div class='shift-title'>Shift <span>${jIn}</span></div><div class='date-text'>✅ ${pDate}</div><div class='time-row'><span><span class='icon-in'>→]</span> ${jIn}</span><span><span class='icon-out'>[←</span> ${jOut}</span></div></div>`;
+          var dObj = new Date(item.tglAsli.split("/").reverse().join("-"));
+          var pDate = hariList[dObj.getDay()] + ", " + dObj.getDate() + " " + bulanList[dObj.getMonth()] + " " + dObj.getFullYear();
+          var jIn = item.masuk !== "-" ? item.masuk.substring(0,5) : "--:--";
+          var jOut = item.pulang !== "-" ? item.pulang.substring(0,5) : "--:--";
+          html += "<div class='card-rekap'><div class='badge-durasi'>" + durasiText + "</div>" +
+                  "<div class='shift-title'>Shift <span>" + jIn + "</span></div>" +
+                  "<div class='date-text'>✅ " + pDate + "</div>" +
+                  "<div class='time-row'><span><span class='icon-in'>&rarr;]</span> " + jIn + "</span>" +
+                  "<span><span class='icon-out'>[&larr;</span> " + jOut + "</span></div></div>";
         });
         divHasil.innerHTML = html;
       }).catch(function(e) { divHasil.innerHTML = "<span style='color:red;'>Error: " + e.message + "</span>"; });
     }
 
     function hitungJarak(lat1, lon1, lat2, lon2) {
-      var R = 6371e3, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
-      var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+      var R = 6371e3, dLat = (lat2-lat1)*Math.PI/180, dLon = (lon2-lon1)*Math.PI/180;
+      var a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
       return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
     }
 
@@ -451,37 +533,27 @@
       document.getElementById("mapBox").style.display = "block";
 
       if (typeof L === "undefined") {
-        document.getElementById("peta").innerHTML = "<div style='padding:15px; background:#f8d7da; color:#721c24; border-radius:8px; font-size:12px; text-align:center;'>Gagal memuat peta (library Leaflet tidak terunduh). Kemungkinan jaringan/WiFi Anda memblokir cdnjs.cloudflare.com. Coba jaringan lain atau data seluler.</div>";
-        var infoDivGagal = document.getElementById("infoJarak");
-        infoDivGagal.innerHTML = "📍 Jarak Anda dari titik absensi: " + jarak + " meter";
-        infoDivGagal.style.cssText = "background:#eaf2f8; color:#1f618d;";
+        document.getElementById("peta").innerHTML = "<div style='padding:15px; background:#f8d7da; color:#721c24; border-radius:8px; font-size:12px;'>Gagal memuat peta (Leaflet tidak terunduh). Jaringan Anda mungkin memblokir cdnjs.cloudflare.com.</div>";
+        var g = document.getElementById("infoJarak");
+        g.innerHTML = "📍 Jarak Anda dari titik absensi: " + jarak + " meter";
+        g.style.cssText = "background:#eaf2f8; color:#1f618d;";
         return;
       }
 
       if (!petaMap) {
         petaMap = L.map('peta', { zoomControl: true, attributionControl: false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 19
-        }).addTo(petaMap);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(petaMap);
       }
 
-      var titikSaya = [lat, lng];
-      var titikKantor = [KANTOR_LAT, KANTOR_LNG];
-      var bounds = [titikSaya];
+      var titikSaya = [lat, lng], titikKantor = [KANTOR_LAT, KANTOR_LNG], bounds = [titikSaya];
 
-      if (!markerSaya) {
-        markerSaya = L.marker(titikSaya).addTo(petaMap).bindPopup("Posisi Anda saat ini");
-      } else {
-        markerSaya.setLatLng(titikSaya);
-      }
+      if (!markerSaya) markerSaya = L.marker(titikSaya).addTo(petaMap).bindPopup("Posisi Anda saat ini");
+      else markerSaya.setLatLng(titikSaya);
       markerSaya.openPopup();
 
       if (akurasiMeter && akurasiMeter > 0) {
-        if (!lingkaranAkurasi) {
-          lingkaranAkurasi = L.circle(titikSaya, { radius: akurasiMeter, color: '#28a745', fillColor: '#28a745', fillOpacity: 0.12, weight: 1 }).addTo(petaMap);
-        } else {
-          lingkaranAkurasi.setLatLng(titikSaya).setRadius(akurasiMeter);
-        }
+        if (!lingkaranAkurasi) lingkaranAkurasi = L.circle(titikSaya, { radius: akurasiMeter, color:'#28a745', fillColor:'#28a745', fillOpacity:0.12, weight:1 }).addTo(petaMap);
+        else lingkaranAkurasi.setLatLng(titikSaya).setRadius(akurasiMeter);
       }
 
       if (!isNaN(KANTOR_LAT) && !isNaN(KANTOR_LNG)) {
@@ -493,17 +565,12 @@
               iconSize: [25, 41], iconAnchor: [12, 41]
             })
           }).addTo(petaMap).bindPopup("Titik Absensi Ditentukan");
-        } else {
-          markerKantor.setLatLng(titikKantor);
-        }
+        } else markerKantor.setLatLng(titikKantor);
         bounds.push(titikKantor);
 
         if (GUNAKAN_RADIUS === 'YA') {
-          if (!lingkaranRadius) {
-            lingkaranRadius = L.circle(titikKantor, { radius: MAKSIMAL_JARAK, color: '#007bff', fillOpacity: 0.1 }).addTo(petaMap);
-          } else {
-            lingkaranRadius.setLatLng(titikKantor).setRadius(MAKSIMAL_JARAK);
-          }
+          if (!lingkaranRadius) lingkaranRadius = L.circle(titikKantor, { radius: MAKSIMAL_JARAK, color:'#007bff', fillOpacity:0.1 }).addTo(petaMap);
+          else lingkaranRadius.setLatLng(titikKantor).setRadius(MAKSIMAL_JARAK);
         }
       }
 
@@ -527,67 +594,73 @@
       var infoAkurasi = document.getElementById("infoAkurasi");
       if (akurasiMeter && akurasiMeter > 0) {
         var bulat = Math.round(akurasiMeter);
-        if (akurasiMeter <= 20) {
-          infoAkurasi.innerHTML = "🟢 Akurasi GPS: ±" + bulat + " meter (baik)";
-        } else if (akurasiMeter <= 50) {
-          infoAkurasi.innerHTML = "🟡 Akurasi GPS: ±" + bulat + " meter (cukup, tunggu sebentar agar lebih presisi)";
-        } else {
-          infoAkurasi.innerHTML = "🔴 Akurasi GPS: ±" + bulat + " meter (kurang akurat). Coba pindah ke tempat terbuka lalu tekan 'Muat Ulang GPS'.";
-        }
+        if (akurasiMeter <= 20) infoAkurasi.innerHTML = "🟢 Akurasi GPS: ±" + bulat + " meter (baik)";
+        else if (akurasiMeter <= 50) infoAkurasi.innerHTML = "🟡 Akurasi GPS: ±" + bulat + " meter (cukup, tunggu sebentar agar lebih presisi)";
+        else infoAkurasi.innerHTML = "🔴 Akurasi GPS: ±" + bulat + " meter (kurang akurat). Pindah ke tempat terbuka lalu tekan 'Muat Ulang GPS'.";
       }
     }
 
     function dapatkanLokasi() {
-      var nama = document.getElementById("nama").value, jenisAbsen = document.querySelector('input[name="jenisAbsen"]:checked').value, statusDiv = document.getElementById("status"), btn = document.getElementById("btnAbsen");
+      var nama = document.getElementById("nama").value.trim().toUpperCase();
+      var jenisAbsen = document.querySelector('input[name="jenisAbsen"]:checked').value;
+      var statusDiv = document.getElementById("status");
+      var btn = document.getElementById("btnAbsen");
 
       if (!nama || !fotoTerambil) { statusDiv.innerHTML = "<span style='color:red;'>Nama dan Foto (ambil lewat kamera) wajib diisi!</span>"; return; }
+      if (!posisiTerakhir) { statusDiv.innerHTML = "<span style='color:red;'>Lokasi GPS belum terdeteksi. Tunggu sebentar atau tekan 'Muat Ulang GPS'.</span>"; return; }
 
-      if (!posisiTerakhir) {
-        statusDiv.innerHTML = "<span style='color:red;'>Lokasi GPS belum terdeteksi. Mohon tunggu sebentar, atau tekan 'Muat Ulang GPS' lalu coba lagi.</span>";
-        return;
-      }
-
-      localStorage.setItem("namaKaryawan", nama);
       btn.innerHTML = "Memproses... ⏳"; btn.disabled = true; btn.style.backgroundColor = "#6c757d";
 
       var lat = posisiTerakhir.lat, lng = posisiTerakhir.lng;
-      var jarak = hitungJarak(lat, lng, KANTOR_LAT, KANTOR_LNG), jarakBulat = Math.round(jarak);
+      var jarakBulat = Math.round(hitungJarak(lat, lng, KANTOR_LAT, KANTOR_LNG));
 
-      if (GUNAKAN_RADIUS === 'YA' && jarak > MAKSIMAL_JARAK) { statusDiv.innerHTML = `<span style='color:red;'>Di luar area (Jarak: ${jarakBulat}m).</span>`; resetBtn(btn); return; }
+      if (GUNAKAN_RADIUS === 'YA' && jarakBulat > MAKSIMAL_JARAK) {
+        statusDiv.innerHTML = "<span style='color:red;'>Di luar area (Jarak: " + jarakBulat + "m).</span>";
+        resetBtn(btn); return;
+      }
 
       statusDiv.innerHTML = "Mengirim data...";
-
-      var urlAlamat = "https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&zoom=18&addressdetails=1";
 
       function kirimAbsensi(kelurahan, kecamatan, kabupaten) {
         callApi('simpanData', {
           nama: nama, jenisAbsen: jenisAbsen, fotoObj: fotoTerambil,
           lat: lat, lng: lng, jarak: jarakBulat,
-          kelurahan: kelurahan, kecamatan: kecamatan, kabupaten: kabupaten
-        }).then(function(pesan) {
-          statusDiv.innerHTML = `<span style='color:green;'>${pesan}</span>`; btn.innerHTML = "Selesai ✅"; btn.style.backgroundColor = "#28a745";
-          localStorage.setItem("absen_status_" + getTanggalHariIni(), jenisAbsen);
-          periksaStatusAbsenHariIni();
+          kelurahan: kelurahan, kecamatan: kecamatan, kabupaten: kabupaten,
+          deviceId: getDeviceId()
+        }).then(function(hasil) {
+          // Nama baru dikunci SETELAH server menerima absensi
+          kunciNama(nama);
+          statusDiv.innerHTML = "<span style='color:green;'>" + hasil.pesan + "</span>";
+          btn.innerHTML = "Selesai ✅"; btn.style.backgroundColor = "#28a745";
+          ulangiFoto();
+          document.getElementById("btnUlangi").style.display = "none";
+          document.getElementById("btnBukaKamera").style.display = "block";
+          hentikanKamera();
+          terapkanStatus(hasil.statusBaru);
         }).catch(function(err) {
-          statusDiv.innerHTML = `<span style='color:red;'>Error: ${err.message}</span>`; resetBtn(btn);
+          statusDiv.innerHTML = "<span style='color:red;'>Gagal: " + err.message + "</span>";
+          resetBtn(btn);
+          muatStatusDariServer(localStorage.getItem("namaKaryawan") || nama);
         });
       }
 
+      var urlAlamat = "https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lng + "&zoom=18&addressdetails=1";
       fetch(urlAlamat, { headers: { "Accept-Language": "id" } })
-        .then(response => response.json())
-        .then(data => {
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
           var kelurahan = "-", kecamatan = "-", kabupaten = "-";
           if (data && data.address) {
-            kelurahan = data.address.village || data.address.suburb || data.address.hamlet || data.address.neighbourhood || data.address.residential || "-";
-            kecamatan = data.address.city_district || data.address.municipality || data.address.county || data.address.subdistrict || data.address.town || "-";
-            kabupaten = data.address.city || data.address.state_district || data.address.region || "-";
-            if (kelurahan == "-" && kecamatan == "-" && kabupaten == "-") kelurahan = data.display_name || "-";
+            var a = data.address;
+            kelurahan = a.village || a.suburb || a.hamlet || a.neighbourhood || a.residential || "-";
+            kecamatan = a.city_district || a.municipality || a.county || a.subdistrict || a.town || "-";
+            kabupaten = a.city || a.state_district || a.region || "-";
+            if (kelurahan === "-" && kecamatan === "-" && kabupaten === "-") kelurahan = data.display_name || "-";
           }
           kirimAbsensi(kelurahan, kecamatan, kabupaten);
-        }).catch(error => {
-          kirimAbsensi("-", "-", "-");
-        });
+        })
+        .catch(function() { kirimAbsensi("-", "-", "-"); });
     }
+
     function resetBtn(btn) { btn.innerHTML = "Klik Untuk Absen"; btn.disabled = false; btn.style.backgroundColor = "#007bff"; }
   </script>
 </body>
