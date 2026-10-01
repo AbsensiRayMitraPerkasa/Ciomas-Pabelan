@@ -1,5 +1,4 @@
-
-<!DOCTYPE html>
+&lt;!DOCTYPE html&gt;
 <html lang="id">
 <head>
   <meta charset="UTF-8">
@@ -97,6 +96,10 @@
 
     .box-keterangan { width: 100%; padding: 12px; margin-bottom: 14px; border-radius: var(--radius); font-size: clamp(12px, 3.5vw, 15px); font-weight: bold; text-align: center; }
 
+    /* Nama terkunci */
+    .nama-terkunci { background-color: #e9ecef !important; color: #495057; font-weight: bold; }
+    .catatan-kunci { font-size: var(--font-kecil); color: #856404; background: #fff3cd; border: 1px solid #ffeeba; border-radius: var(--radius); padding: 8px 10px; margin: -4px 0 12px; text-align: left; }
+
     /* Jenis absensi: wrap otomatis kalau layar sangat sempit */
     .radio-group { display: flex; flex-wrap: wrap; width: 100%; margin-bottom: 14px; gap: 10px; }
     .radio-group input[type="radio"] { position: absolute; opacity: 0; pointer-events: none; }
@@ -163,6 +166,9 @@
 
     <label class="label-teks" for="nama">Nama Karyawan</label>
     <input type="text" id="nama" placeholder="Masukkan Nama Anda" autocomplete="off" oninput="this.value = this.value.toUpperCase()">
+    <div id="catatanKunci" class="catatan-kunci" style="display:none;">
+      Nama terkunci untuk perangkat ini. Hubungi admin bila perlu diganti.
+    </div>
 
     <button id="btnKalibrasi" class="btn-kalibrasi" onclick="kalibrasiUlang()">Muat Ulang GPS</button>
 
@@ -277,9 +283,13 @@
         "<div style='font-size: clamp(20px,6.5vw,30px);'>" + teksJam + "</div>";
     }
 
-    // ==== Ingat nama terakhir di layar (tanpa mengunci input) ====
-    function ingatNama(nama) {
-      document.getElementById("nama").value = nama;
+    // ==== Kunci nama di layar ====
+    function kunciNama(nama) {
+      var input = document.getElementById("nama");
+      input.value = nama;
+      input.readOnly = true;
+      input.classList.add("nama-terkunci");
+      document.getElementById("catatanKunci").style.display = "block";
       localStorage.setItem("namaKaryawan", nama);
     }
 
@@ -336,7 +346,7 @@
       setDefaultDates(); cekWebViewInApp();
 
       var simpananNama = localStorage.getItem("namaKaryawan");
-      if (simpananNama) { document.getElementById("nama").value = simpananNama; }
+      if (simpananNama) { kunciNama(simpananNama); }
 
       document.getElementById('status').innerHTML = "Memuat pengaturan...";
       callApi('getConfig', {}).then(function(cfg) {
@@ -616,7 +626,7 @@
           kelurahan: kelurahan, kecamatan: kecamatan, kabupaten: kabupaten,
           deviceId: getDeviceId()
         }).then(function(hasil) {
-          ingatNama(nama);
+          kunciNama(nama);
           statusDiv.innerHTML = "<span style='color:green;'>" + hasil.pesan + "</span>";
           btn.innerHTML = "Selesai ✅"; btn.style.backgroundColor = "#28a745";
           ulangiFoto();
